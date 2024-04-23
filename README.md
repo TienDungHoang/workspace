@@ -217,8 +217,11 @@ docker build -t coworking .
 ![Alt text](https://vscode-remote%2B7cslhx2b6p-002eprod-002eudacity-002dstudent-002dworkspaces-002ecom.vscode-resource.vscode-cdn.net/workspace/Project%20Screenshots/ECR%20Repository.png?version%3D1713895726110)
 
 
-
-
+3. Push to Github
+```bash
+git config --global user.email "DungHoang1989@gmail.com"
+git config --global user.name "TienDungHoang"
+```
 
 
 
