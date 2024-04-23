@@ -21,24 +21,107 @@ For this project, you are a DevOps engineer who will be collaborating with a tea
 
 ### Setup
 #### 1. Create an EKS Cluster
-1. Create an EKS Cluster: 
+1. Check IAM Permission: 
+```bash
+aws sts get-caller-identity
+aws configure
+aws configure set aws_session_token
+```
+
+2. Create an EKS Cluster: 
 ```bash
 eksctl create cluster --name my-cluster --region us-east-1 --nodegroup-name my-nodes --node-type t3.small --nodes 1 --nodes-min 1 --nodes-max 2
 ```
+3. Update Kubeconfig: 
+```bash
+aws eks --region us-east-1 update-kubeconfig --name my-cluster
+```
+Verify and copy the context name
+```bash
+kubectl config current-context
+```
 
-#### 1. Configure a Database
+4. Delete EKS Cluster after use: 
+```bash
+eksctl delete cluster --name my-cluster --region us-east-1
+```
+
+#### 2. Configure a Database
 Set up a Postgres database using a Helm Chart.
 
-1. 
-2. Set up Bitnami Repo
+1. Install Helm: 
 ```bash
-helm repo add <REPO_NAME> https://charts.bitnami.com/bitnami
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 ```
 
-2. Install PostgreSQL Helm Chart
+2. Set up Bitnami Repo:
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
 ```
-helm install <SERVICE_NAME> <REPO_NAME>/postgresql
+
+3. Install PostgreSQL:
+```bash
+helm install my-postgres bitnami/postgresql
 ```
+
+4. Check the installation: 
+```bash
+helm list
+kubectl get namespace
+kubectl get pods
+```
+
+5. Apply YAML configurations
+```bash
+kubectl apply -f pvc.yaml
+kubectl apply -f pv.yaml
+kubectl apply -f postgresql-deployment.yaml
+```
+
+6. Create postgresql-service: 
+```bash
+kubectl apply -f postgresql-service.yaml
+```
+
+7. Setup port-forwarding: 
+# List the services
+```bash
+kubectl get svc
+```
+# Set up port-forwarding to `postgresql-service`
+```bash
+kubectl port-forward service/postgresql-service 5433:5432 &
+```
+
+8. Run seed files: 
+# Install psql on workspace: 
+```bash
+apt update
+apt install postgresql postgresql-contrib
+```
+
+9. Create tables and populate them with data: 
+```bash
+export DB_PASSWORD=mypassword
+export LC_ALL=C
+PGPASSWORD="$DB_PASSWORD" psql --host 127.0.0.1 -U myuser -d mydatabase -p 5433 < /workspace/db/1_create_tables.sql
+PGPASSWORD="$DB_PASSWORD" psql --host 127.0.0.1 -U myuser -d mydatabase -p 5433 < /workspace/db/2_seed_users.sql
+PGPASSWORD="$DB_PASSWORD" psql --host 127.0.0.1 -U myuser -d mydatabase -p 5433 < /workspace/db/3_seed_tokens.sql
+```
+
+10. Check the tables 
+```bash
+PGPASSWORD="$DB_PASSWORD" psql --host 127.0.0.1 -U myuser -d mydatabase -p 5433
+select* from users;
+select* from tokens;
+```
+
+
+
+
+
+
 
 This should set up a Postgre deployment at `<SERVICE_NAME>-postgresql.default.svc.cluster.local` in your Kubernetes cluster. You can verify it by running `kubectl svc`
 
@@ -66,24 +149,33 @@ kubectl exec -it <POD_NAME> bash
 PGPASSWORD="<PASSWORD HERE>" psql postgres://postgres@<SERVICE_NAME>:5432/postgres -c <COMMAND_HERE>
 ```
 
-4. Run Seed Files
-We will need to run the seed files in `db/` in order to create the tables and populate them with data.
-
-```bash
-kubectl port-forward --namespace default svc/<SERVICE_NAME>-postgresql 5432:5432 &
-    PGPASSWORD="$POSTGRES_PASSWORD" psql --host 127.0.0.1 -U postgres -d postgres -p 5432 < <FILE_NAME.sql>
-```
 
 ### 2. Running the Analytics Application Locally
 In the `analytics/` directory:
 
 1. Install dependencies
 ```bash
-pip install -r requirements.txt
+# Update the local package index with the latest packages from the repositories
+apt update
+
+# Install a couple of packages to successfully install postgresql server locally
+apt install build-essential libpq-dev
+
+# Update python modules to successfully build the required modules
+pip install --upgrade pip setuptools wheel
+
+# Install all modules listed in requirement.txt
+pip install -r /workspace/analytics/requirements.txt
 ```
+
 2. Run the application (see below regarding environment variables)
 ```bash
-<ENV_VARS> python app.py
+export DB_USERNAME=myuser
+export DB_PASSWORD=${POSTGRES_PASSWORD}
+export DB_HOST=127.0.0.1
+export DB_PORT=5433
+export DB_NAME=mydatabase
+python /workspace/analytics/app.py
 ```
 
 There are multiple ways to set environment variables in a command. They can be set per session by running `export KEY=VAL` in the command line or they can be prepended into your command.
@@ -106,6 +198,30 @@ The benefit here is that it's explicitly set. However, note that the `DB_PASSWOR
 
 * Generate report for check-ins grouped by users
 `curl <BASE_URL>/api/reports/user_visits`
+
+
+
+### 3. Deploy the analytics application: 
+1. Dockerize the Application: 
+# Update docker version
+```bash
+apt update
+apt install docker-ce docker-ce-cli containerd.io
+```
+# Build and run a docker image from Dockerfile
+```bash
+docker build -t coworking .
+```
+
+2. Create ECR Repository and push docker image to repository
+![Alt text](https://vscode-remote%2B7cslhx2b6p-002eprod-002eudacity-002dstudent-002dworkspaces-002ecom.vscode-resource.vscode-cdn.net/workspace/Project%20Screenshots/ECR%20Repository.png?version%3D1713895726110)
+
+
+
+
+
+
+
 
 ## Project Instructions
 1. Set up a Postgres database with a Helm Chart
